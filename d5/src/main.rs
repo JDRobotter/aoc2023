@@ -1,69 +1,184 @@
-fn numbers_from_str(s: &str) -> Vec<u32> {
+use std::collections::HashMap;
+
+fn numbers_from_str(s: &str) -> Vec<i64> {
     s.split(' ')
-        .filter_map(|s| u32::from_str_radix(s, 10).ok())
+        .filter_map(|s| i64::from_str_radix(s, 10).ok())
         .collect()
+}
+
+#[derive(Debug)]
+struct SourceDestinationMap {
+    source: String,
+    destination: String,
+    converters: Vec<ConverterRange>,
+}
+
+impl SourceDestinationMap {
+    pub fn new(source: String, destination: String) -> Self {
+        Self {
+            source,
+            destination,
+            converters: Vec::new(),
+        }
+    }
+    pub fn source(&self) -> &String {
+        &self.source
+    }
+
+    pub fn destination(&self) -> &String {
+        &self.destination
+    }
+
+    pub fn add_range(&mut self, didx: i64, sidx: i64, range: i64) {
+        self.converters.push(ConverterRange::new(didx, sidx, range))
+    }
+
+    pub fn convert(&self, idx: i64) -> i64 {
+        for conv in &self.converters {
+            if let Some(idx) = conv.convert(idx) {
+                return idx;
+            }
+        }
+        return idx;
+    }
+}
+
+#[derive(Debug)]
+struct ConverterRange {
+    didx: i64,
+    sidx: i64,
+    range: i64,
+}
+
+impl ConverterRange {
+    pub fn new(didx: i64, sidx: i64, range: i64) -> Self {
+        Self { didx, sidx, range }
+    }
+
+    pub fn convert(&self, idx: i64) -> Option<i64> {
+        let delta = idx - self.sidx;
+        if delta >= 0 && delta < self.range {
+            Some(self.didx + delta)
+        } else {
+            None
+        }
+    }
 }
 
 fn main() {
     /*
-    let data = "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53
-    Card 2: 13 32 20 16 61 | 61 30 68 82 17 32 24 19
-    Card 3:  1 21 53 59 44 | 69 82 63 72 16 21 14  1
-    Card 4: 41 92 73 84 69 | 59 84 76 51 58  5 54 83
-    Card 5: 87 83 26 28 32 | 88 30 70 12 93 22 82 36
-    Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11";
-    */
-    let mut file = std::fs::File::open("input").unwrap();
+        let data = "seeds: 79 14 55 13
+
+    seed-to-soil map:
+    50 98 2
+    52 50 48
+
+    soil-to-fertilizer map:
+    0 15 37
+    37 52 2
+    39 0 15
+
+    fertilizer-to-water map:
+    49 53 8
+    0 11 42
+    42 0 7
+    57 7 4
+
+    water-to-light map:
+    88 18 7
+    18 25 70
+
+    light-to-temperature map:
+    45 77 23
+    81 45 19
+    68 64 13
+
+    temperature-to-humidity map:
+    0 69 1
+    1 0 69
+
+    humidity-to-location map:
+    60 56 37
+    56 93 4";
+        */
+
+    let mut data = String::from("");
     use std::io::Read;
-    let mut data = String::new();
-    file.read_to_string(&mut data).unwrap();
+    std::fs::File::open("input")
+        .unwrap()
+        .read_to_string(&mut data)
+        .unwrap();
 
-    let cards: Vec<&str> = data.split('\n').collect();
-    let n = cards.len();
+    let mut lines = data.split('\n');
 
-    let mut copies = Vec::new();
-    copies.resize(n, 0u32);
+    // -- extract seeds
+    let seeds = lines.next().unwrap();
 
-    let mut sum: u32 = 0;
-    for (i, line) in cards.iter().enumerate() {
-        if line.len() == 0 {
-            continue;
+    let seeds = seeds.strip_prefix("seeds:").unwrap();
+    let seeds = numbers_from_str(seeds);
+
+    // pop an empty line
+    lines.next().unwrap();
+
+    let mut maps = HashMap::new();
+
+    // -- extract maps
+    let mut run = true;
+    while run {
+        // A-to-B map:
+        let line = lines.next();
+
+        if line.is_none() {
+            run = false;
+            break;
         }
+        let line = line.unwrap();
 
-        // -- extract card number
-        let mut line = line.split(':');
-        let _card = line.next().unwrap();
-        println!("{_card}");
+        println!("L {line}");
+        let line = line.strip_suffix(" map:").unwrap();
+        let mut ab = line.split("-to-");
+        let source = ab.next().unwrap();
+        let destination = ab.next().unwrap();
 
-        // -- extract winning numbers
-        let line = line.next().unwrap();
-        let mut line = line.split('|');
-        let win = line.next().unwrap();
-        let win = numbers_from_str(win);
+        let mut sdmap = SourceDestinationMap::new(String::from(source), String::from(destination));
 
-        // -- extract own numbers
-        let own = line.next().unwrap();
-        let own = numbers_from_str(own);
-
-        // -- compute card score
-        let mut score = 0;
-        for on in own {
-            if win.contains(&on) {
-                score += 1;
+        // range lines
+        loop {
+            let line = lines.next();
+            println!("{line:?}");
+            if let Some(line) = line {
+                if line.len() == 0 {
+                    // empty line poped
+                    break;
+                }
+                let vs = numbers_from_str(line);
+                println!("{line:?} {vs:?}");
+                sdmap.add_range(vs[0], vs[1], vs[2]);
+            } else {
+                // EOF
+                run = false;
+                break;
             }
         }
 
-        // -- count cards
-        let inc = 1 + copies[i];
-        println!("count += {inc}");
-        sum += inc;
-
-        // -- append copies of cards to stack
-        for k in 0..score {
-            let idx = i + k + 1;
-            println!("{idx}");
-            copies[idx] += inc;
-        }
+        maps.insert(String::from(source), sdmap);
     }
-    println!("TOTAL {sum}");
+    println!("{maps:?}");
+
+    // for each initial seed
+    let mut locs = vec![];
+    for seedidx in seeds.iter() {
+        let mut idx = *seedidx;
+        let mut source = String::from("seed");
+        while source != "location" {
+            let sdmap = maps.get(&source).unwrap();
+            idx = sdmap.convert(idx);
+            source = sdmap.destination().clone();
+        }
+        println!("{seedidx} -> {idx}");
+        locs.push(idx);
+    }
+
+    let minloc = locs.iter().min().unwrap();
+    dbg!(minloc);
 }
