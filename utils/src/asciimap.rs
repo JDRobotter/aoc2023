@@ -111,8 +111,15 @@ impl AsciiMap {
         }
     }
 
+    pub fn iset(&mut self, x: isize, y: isize, c: char) -> Option<()> {
+        if x < 0 || y < 0 {
+            return None;
+        }
+        self.set(x as usize, y as usize, c)
+    }
+
     pub fn set(&mut self, x: usize, y: usize, c: char) -> Option<()> {
-        if x >= self.width {
+        if x >= self.width || y >= self.height {
             return None;
         }
         let (x, y) = self.rotate(x, y);
@@ -121,8 +128,15 @@ impl AsciiMap {
         Some(())
     }
 
+    pub fn iget(&self, x: isize, y: isize) -> Option<&char> {
+        if x < 0 || y < 0 {
+            return None;
+        }
+        self.get(x as usize, y as usize)
+    }
+
     pub fn get(&self, x: usize, y: usize) -> Option<&char> {
-        if x >= self.width {
+        if x >= self.width || y >= self.height {
             return None;
         }
         let (x, y) = self.rotate(x, y);
