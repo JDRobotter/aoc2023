@@ -32,6 +32,16 @@ impl AsciiMap {
         }
     }
 
+    pub fn from_multi_lines(lines: impl AsRef<str>) -> Self {
+        let lines: &str = lines.as_ref();
+        let mut _self = AsciiMap::new();
+        for line in lines.trim().split('\n') {
+            let line = line.trim();
+            _self.push(line);
+        }
+        _self
+    }
+
     pub fn width(&self) -> usize {
         self.width
     }
@@ -59,16 +69,6 @@ impl AsciiMap {
             Rotation::R180 => (w - 1 - x, h - 1 - y),
             Rotation::R270 => (y, w - 1 - x),
         }
-    }
-
-    pub fn from_multi_lines(lines: impl AsRef<str>) -> Self {
-        let lines: &str = lines.as_ref();
-        let mut _self = AsciiMap::new();
-        for line in lines.trim().split('\n') {
-            let line = line.trim();
-            _self.push(line);
-        }
-        _self
     }
 
     pub fn empty(&self) -> bool {
@@ -111,6 +111,14 @@ impl AsciiMap {
         }
     }
 
+    fn index_to_xy(&self, k: usize) -> (usize, usize) {
+        (k % self.width, k / self.width)
+    }
+
+    fn xy_to_index(&self, x: usize, y: usize) -> usize {
+        x + y * self.width
+    }
+
     pub fn iset(&mut self, x: isize, y: isize, c: char) -> Option<()> {
         if x < 0 || y < 0 {
             return None;
@@ -123,7 +131,7 @@ impl AsciiMap {
             return None;
         }
         let (x, y) = self.rotate(x, y);
-        let k = x + y * self.width;
+        let k = self.xy_to_index(x, y);
         self.map[k] = c;
         Some(())
     }
@@ -140,7 +148,7 @@ impl AsciiMap {
             return None;
         }
         let (x, y) = self.rotate(x, y);
-        let k = x + y * self.width;
+        let k = self.xy_to_index(x, y);
         self.map.get(k)
     }
 
@@ -149,5 +157,35 @@ impl AsciiMap {
         let b = *self.get(xb, yb).unwrap();
         self.set(xa, ya, b);
         self.set(xb, yb, a);
+    }
+
+    // return position of first occurence of char, None if not found
+    pub fn find(&self, sc: char) -> Option<(usize, usize)> {
+        for (k, &mc) in self.map.iter().enumerate() {
+            if mc == sc {
+                return Some(self.index_to_xy(k));
+            }
+        }
+        None
+    }
+
+    pub fn ifind(&self, sc: char) -> Option<(isize, isize)> {
+        let (x, y) = self.find(sc)?;
+        Some((x as isize, y as isize))
+    }
+
+    // count occurences of char in map
+    pub fn count(&self, sc: char) -> usize {
+        self.map.iter().filter(|c| sc == **c).count()
+    }
+
+    /// iterate through elements of map return element and position
+    pub fn iter(&self) -> impl Iterator<Item = (char, (usize, usize))> + use<'_> {
+        self.map.iter().enumerate().map(|(index, &c)| {
+            // convert index to 2D position
+            let xy = self.index_to_xy(index);
+            // return a (char, position) tuple
+            (c, xy)
+        })
     }
 }
