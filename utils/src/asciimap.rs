@@ -42,6 +42,23 @@ impl AsciiMap {
         _self
     }
 
+    /// Fill in map from a multiline string, padding with default char if
+    /// map is not squared
+    pub fn from_multi_lines_or(lines: impl AsRef<str>, default: char) -> Self {
+        let lines: &str = lines.as_ref();
+        let mut _self = AsciiMap::new();
+
+        // find longest line
+        let lines: Vec<&str> = lines.split('\n').map(|s| s).collect();
+        // set map width
+        _self.width = lines.iter().map(|s| s.len()).max().unwrap();
+
+        for line in lines {
+            _self.push_or(line, default);
+        }
+        _self
+    }
+
     pub fn width(&self) -> usize {
         self.width
     }
@@ -75,6 +92,20 @@ impl AsciiMap {
         self.width == 0
     }
 
+    // push line to map padding line with default char if some are missing
+    pub fn push_or(&mut self, line: &str, default: char) {
+        // width should be set
+        assert!(self.width > 0);
+        // line length should not exceed map width
+        assert!(line.len() <= self.width);
+
+        for idx in 0..self.width {
+            self.map.push(line.chars().nth(idx).unwrap_or(default));
+        }
+
+        self.height += 1;
+    }
+
     pub fn push(&mut self, line: &str) {
         if self.width == 0 {
             self.width = line.len();
@@ -91,19 +122,23 @@ impl AsciiMap {
     pub fn print(&self) {
         let mut sd = String::new();
         let mut su = String::new();
-        for i in 0..self.width {
+
+        // limit printed width to 80 cols
+        let width = self.width.min(80);
+
+        for i in 0..width {
             let i = i as u32;
             sd.push(std::char::from_digit(i / 10, 10).unwrap());
             su.push(std::char::from_digit(i % 10, 10).unwrap());
         }
 
-        if self.width > 10 {
+        if width > 10 {
             println!("   {sd}");
         }
         println!("   {su}");
         for y in 0..self.height() {
             let mut s = String::new();
-            for x in 0..self.width() {
+            for x in 0..width {
                 let c = self.get(x, y).unwrap();
                 s.push(*c);
             }
