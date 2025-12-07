@@ -133,16 +133,16 @@ impl AsciiMap {
         }
 
         if width > 10 {
-            println!("   {sd}");
+            eprintln!("   {sd}");
         }
-        println!("   {su}");
+        eprintln!("   {su}");
         for y in 0..self.height() {
             let mut s = String::new();
             for x in 0..width {
                 let c = self.get(x, y).unwrap();
                 s.push(*c);
             }
-            println!("{y:2} {s}");
+            eprintln!("{y:2} {s}");
         }
     }
 
@@ -212,6 +212,12 @@ impl AsciiMap {
     // count occurences of char in map
     pub fn count(&self, sc: char) -> usize {
         self.map.iter().filter(|c| sc == **c).count()
+    }
+
+    // return map line as a slice
+    pub fn line(&self, y: usize) -> Option<&[char]> {
+        let start = y * self.width;
+        Some(&self.map[start..start + self.width])
     }
 
     /// iterate through elements of map return element and position
