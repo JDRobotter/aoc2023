@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Rotation {
     R0,
     R90,
@@ -32,18 +32,36 @@ impl AsciiMap {
         }
     }
 
+    /// Build a map of same side filled with provided char
+    pub fn clone_and_fill(&self, c: char) -> Self {
+        let w = self.width;
+        let h = self.height;
+        let rotation = self.rotation;
+        Self {
+            map: vec![c; w * h],
+            width: w,
+            height: h,
+            rotation,
+        }
+    }
+
     pub fn from_multi_lines(lines: impl AsRef<str>) -> Self {
         let lines: &str = lines.as_ref();
         let mut _self = AsciiMap::new();
-        for line in lines.trim().split('\n') {
-            let line = line.trim();
-            _self.push(line);
+
+        // find longest line
+        let lines: Vec<&str> = lines.split('\n').map(|s| s).collect();
+        _self.width = lines.iter().map(|s| s.len()).max().unwrap();
+
+        for line in lines {
+            assert!(line.len() == _self.width);
+            _self.push_or(line, ' ');
         }
         _self
     }
 
     /// Fill in map from a multiline string, padding with default char if
-    /// map is not squared
+    /// map is not square
     pub fn from_multi_lines_or(lines: impl AsRef<str>, default: char) -> Self {
         let lines: &str = lines.as_ref();
         let mut _self = AsciiMap::new();
@@ -65,6 +83,10 @@ impl AsciiMap {
 
     pub fn height(&self) -> usize {
         self.height
+    }
+
+    pub fn size(&self) -> (usize, usize) {
+        (self.width, self.height)
     }
 
     pub fn set_rotation(&mut self, rotation: Rotation) {
@@ -228,5 +250,25 @@ impl AsciiMap {
             // return a (char, position) tuple
             (c, xy)
         })
+    }
+}
+
+impl std::fmt::Debug for AsciiMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AsciiMap")
+            .field("map", &self.map)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("rotation", &self.rotation)
+            .finish()
+    }
+}
+
+impl PartialEq for AsciiMap {
+    fn eq(&self, other: &Self) -> bool {
+        self.map == other.map
+            && self.width == other.width
+            && self.height == other.height
+            && self.rotation == other.rotation
     }
 }
