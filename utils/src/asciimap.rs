@@ -158,6 +158,7 @@ impl AsciiMap {
             eprintln!("   {sd}");
         }
         eprintln!("   {su}");
+        eprintln!("");
         for y in 0..self.height() {
             let mut s = String::new();
             for x in 0..width {

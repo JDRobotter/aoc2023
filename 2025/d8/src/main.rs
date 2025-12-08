@@ -7,8 +7,8 @@ use std::{
 fn main() -> Result<(), std::io::Error> {
     let mut input = "".into();
     std::fs::File::open("input")?.read_to_string(&mut input)?;
-    //dbg!(puzzle1(&input));
-    //dbg!(puzzle2(&input));
+    //dbg!(GP::new(&input).solve1(1000));
+    dbg!(GP::new(&input).solve2());
     Ok(())
 }
 
@@ -17,11 +17,17 @@ struct JunctionBox {
     x: isize,
     y: isize,
     z: isize,
+    circuit: usize,
 }
 
 impl JunctionBox {
     fn new(x: isize, y: isize, z: isize) -> Self {
-        Self { x, y, z }
+        Self {
+            x,
+            y,
+            z,
+            circuit: 0,
+        }
     }
 
     /// Return squared distance between self and an other box
@@ -197,26 +203,64 @@ impl GP {
         sum as u64
     }
 
+    /// Update all boxes which belong to old circuit to new circuit
+    fn update_boxes_circuit(boxes: &mut Vec<JunctionBox>, old: usize, new: usize) {
+        for jbox in boxes.iter_mut() {
+            if jbox.circuit == old {
+                jbox.circuit = new;
+            }
+        }
+    }
+
     #[allow(unused)]
     fn solve2(&mut self) -> u64 {
         // -- connect closest boxes --
         self.connect(1_000_000, 1_000_000_000);
 
-        // -- find circuits --
-        // each boxes is EXACTLY part of ONE circuit,
-        // let's make a set of boxes indices and remove them one by one
-        // as we progress along circuits
-        let mut bidxs: BTreeSet<usize> = (0..self.boxes.len()).collect();
+        let mut last = Connection::new(0, 1, 2);
+        let mut circuit = 100;
+        // assume there is a unique circuit, iterate through connections ordered
+        // by distance between boxes and connect boxes along
+        for cn in self.connected.iter() {
+            // connect both boxes
+            match (self.boxes[cn.a].circuit, self.boxes[cn.b].circuit) {
+                (0, 0) => {
+                    // both boxes are not connect to any circuit
+                    // create a new circuit and connect them
+                    circuit += 1;
+                    self.boxes[cn.a].circuit = circuit;
+                    self.boxes[cn.b].circuit = circuit;
+                    last = *cn;
+                }
 
-        let mut last_connection = None;
-        let n = self.follow_circuit(0, &mut bidxs, &mut last_connection);
+                (0, cb) => {
+                    // one box is not connect there other is, join them
+                    self.boxes[cn.a].circuit = cb;
+                    last = *cn;
+                }
 
-        let last_connection = last_connection.unwrap();
-        // expect for ex 1 : 9 & 11
-        eprintln!("last conn = {last_connection:?}");
-        let boxa = dbg!(self.boxes[last_connection.a]);
-        let boxb = dbg!(self.boxes[last_connection.b]);
+                (ca, 0) => {
+                    // one box is not connect there other is, join them
+                    self.boxes[cn.b].circuit = ca;
+                    last = *cn;
+                }
 
+                (ca, cb) if ca == cb => {
+                    // both boxes are already connected together, nothing to do
+                }
+
+                (ca, cb) => {
+                    // boxes are connected to different circuits, join them
+                    Self::update_boxes_circuit(&mut self.boxes, ca, cb);
+                    last = *cn;
+                }
+            }
+        }
+
+        // get two last connected boxes
+        let boxa = self.boxes[last.a];
+        let boxb = self.boxes[last.b];
+        // return puzzle solution
         (boxa.x * boxb.x) as u64
     }
 }
@@ -292,6 +336,6 @@ mod test {
             .unwrap()
             .read_to_string(&mut input)
             .unwrap();
-        assert_eq!(GP::new(&input).solve2(), 75680);
+        assert_eq!(GP::new(&input).solve2(), 8995844880);
     }
 }
