@@ -1,13 +1,9 @@
-use std::{
-    collections::{BTreeSet, HashSet},
-    io::Read,
-    str::FromStr,
-};
+use std::{collections::BTreeSet, io::Read, str::FromStr};
 
 fn main() -> Result<(), std::io::Error> {
     let mut input = "".into();
     std::fs::File::open("input")?.read_to_string(&mut input)?;
-    //dbg!(GP::new(&input).solve1(1000));
+    dbg!(GP::new(&input).solve1(1000));
     dbg!(GP::new(&input).solve2());
     Ok(())
 }
@@ -82,19 +78,19 @@ impl FromStr for JunctionBox {
             .next()
             .ok_or("not enough coordinates")?
             .parse::<isize>()
-            .or_else(|_| Err("unable to parse integer"))?;
+            .map_err(|_| "unable to parse integer")?;
 
         let y = ns
             .next()
             .ok_or("not enough coordinates")?
             .parse::<isize>()
-            .or_else(|_| Err("unable to parse integer"))?;
+            .map_err(|_| "unable to parse integer")?;
 
         let z = ns
             .next()
             .ok_or("not enough coordinates")?
             .parse::<isize>()
-            .or_else(|_| Err("unable to parse integer"))?;
+            .map_err(|_| "unable to parse integer")?;
 
         Ok(JunctionBox::new(x, y, z))
     }
@@ -171,7 +167,7 @@ impl GP {
             {
                 // remove connected box
                 rem.remove(&idx);
-                let _ = last.insert(conn.clone());
+                let _ = last.insert(*conn);
                 nboxes += self.follow_circuit(idx, rem, last);
             }
         }
@@ -199,12 +195,12 @@ impl GP {
 
         // multiply together the size of the 3 largest circuits
         counts.sort();
-        let sum: usize = counts.iter().rev().take(3).fold(1, |a, x| a * x);
+        let sum: usize = counts.iter().rev().take(3).product();
         sum as u64
     }
 
     /// Update all boxes which belong to old circuit to new circuit
-    fn update_boxes_circuit(boxes: &mut Vec<JunctionBox>, old: usize, new: usize) {
+    fn update_boxes_circuit(boxes: &mut [JunctionBox], old: usize, new: usize) {
         for jbox in boxes.iter_mut() {
             if jbox.circuit == old {
                 jbox.circuit = new;
