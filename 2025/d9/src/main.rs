@@ -3,8 +3,8 @@ use std::{collections::BinaryHeap, io::Read};
 fn main() -> Result<(), std::io::Error> {
     let mut input = "".into();
     std::fs::File::open("input")?.read_to_string(&mut input)?;
-    //dbg!(GP::new(&input).solve1(1000));
-    //dbg!(GP::new(&input).solve2());
+    dbg!(TileFloor::from_input(&input).largest_rectangle());
+    dbg!(TileFloor::from_input(&input).largest_rectangle_non_empty());
     Ok(())
 }
 
@@ -55,7 +55,7 @@ impl PartialEq for Rectangle {
 
 impl PartialOrd for Rectangle {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.surface.partial_cmp(&other.surface)
+        Some(self.cmp(other))
     }
 }
 
@@ -83,7 +83,6 @@ impl TileFloor {
         // assert than there is no "flat" corner in our build list
         assert!(Self::are_some_corners_colinear(&reds));
 
-        let mut lv = (0, 0);
         let mut vsegments = vec![];
         let mut hsegments = vec![];
         for k in 0..(reds.len() - 1) {
@@ -105,7 +104,7 @@ impl TileFloor {
                 };
 
                 hsegments.insert(idx, vs);
-            } else {
+            } else if p.0 == np.0 {
                 // -- segment is vertical
                 let ya = p.1.min(np.1);
                 let yb = p.1.max(np.1);
@@ -119,6 +118,11 @@ impl TileFloor {
                 };
 
                 vsegments.insert(idx, vs);
+            } else {
+                panic!(
+                    "segment ([{k}]{p:?}, [{}]{np:?}) is neither horizontal or vertical",
+                    k + 1
+                );
             }
         }
 
@@ -147,7 +151,7 @@ impl TileFloor {
     fn surface_of(&self, aidx: usize, bidx: usize) -> isize {
         let (ax, ay) = self.reds[aidx];
         let (bx, by) = self.reds[bidx];
-        return ((bx - ax).abs() + 1) * ((by - ay).abs() + 1);
+        ((bx - ax).abs() + 1) * ((by - ay).abs() + 1)
     }
 
     /// return true if provided three points are colinear
@@ -166,20 +170,27 @@ impl TileFloor {
                 return false;
             }
         }
-        return true;
+        true
     }
 
-    fn throw_ray(&self, segments: &Vec<HVSegment>, start: (isize, isize)) -> isize {
-        self.throw_ray_distance(segments, start, isize::MAX)
+    fn throw_ray(
+        &self,
+        segments: &[HVSegment],
+        start: (isize, isize),
+        stop_on_intersect: bool,
+    ) -> isize {
+        self.throw_ray_distance(segments, start, isize::MAX, stop_on_intersect)
     }
 
     /// throw a ray positive a sum windings of encountered segments
     fn throw_ray_distance(
         &self,
-        segments: &Vec<HVSegment>,
+        segments: &[HVSegment],
         (a, b): (isize, isize),
         length: isize,
+        stop_on_intersect: bool,
     ) -> isize {
+        //eprintln!("TRD ({a},{b}) {length}");
         // find first vertical segment located at provided start position
         let sidx = match segments.binary_search_by(|vs: &HVSegment| vs.a.cmp(&a)) {
             Ok(idx) => idx,
@@ -197,14 +208,18 @@ impl TileFloor {
         // ray height
         let ray = b;
 
-        for idx in sidx..segments.len() {
-            let vs = &segments[idx];
+        for vs in segments.iter().skip(sidx) {
+            //eprintln!("S {} {}", vs.b0, vs.b1);
             // limit ray length
-            if vs.a - a > length {
+            if vs.a - a + 1 > length {
+                //eprintln!("limit {}", vs.a);
                 break;
             }
             // check ray if intersecting
             if vs.intersect(ray) {
+                if stop_on_intersect {
+                    return 1;
+                }
                 winding += vs.winding;
             }
         }
@@ -222,8 +237,10 @@ impl TileFloor {
         // our rectangle need to have is left side going up when going from a to b
         let (a, b) = ((a.0.min(b.0), a.1.min(b.1)), (a.0.max(b.0), a.1.max(b.1)));
 
+        //eprintln!("ISC R {a:?} {b:?}");
         // special case were the rectangle is a line
         if a.0 == b.0 || a.1 == b.1 {
+            //eprintln!("LINE");
             // always contained
             return true;
         }
@@ -232,9 +249,10 @@ impl TileFloor {
 
         // throw ray going x positive from rectangle bottom-left corner +(1,1)
         // if returned winding is even, ray started from inside the floor
-        let inside = self.throw_ray(&self.vsegments, (a.0 + 1, a.1 + 1)) % 2 != 0;
+        let inside = self.throw_ray(&self.vsegments, (a.0 + 1, a.1 + 1), false) % 2 != 0;
         if !inside {
             // if this point is outside of the floor, the rectangle could not be fully contained inside
+            //eprintln!("BLC not inside");
             return false;
         }
         //
@@ -245,18 +263,22 @@ impl TileFloor {
         //    a.0     b.0
         // check if rectangle borders segments are crossed
         let vs = &self.vsegments;
-        if self.throw_ray_distance(&vs, (a.0 + 1, a.1 + 1), isize::abs(b.0 - a.0) - 2) != 0 {
+        if self.throw_ray_distance(vs, (a.0 + 1, a.1 + 1), isize::abs(b.0 - a.0) - 1, true) != 0 {
+            //eprintln!("VRB intersect");
             return false;
         }
-        if self.throw_ray_distance(&vs, (a.0 + 1, b.1 - 1), isize::abs(b.0 - a.0) - 2) != 0 {
+        if self.throw_ray_distance(vs, (a.0 + 1, b.1 - 1), isize::abs(b.0 - a.0) - 1, true) != 0 {
+            //eprintln!("VRT intersect");
             return false;
         }
 
         let hs = &self.hsegments;
-        if self.throw_ray_distance(&hs, (a.1 + 1, a.0 + 1), isize::abs(b.1 - a.1) - 2) != 0 {
+        if self.throw_ray_distance(hs, (a.1 + 1, a.0 + 1), isize::abs(b.1 - a.1) - 1, true) != 0 {
+            //eprintln!("HRL intersect");
             return false;
         }
-        if self.throw_ray_distance(&hs, (a.1 + 1, b.0 - 1), isize::abs(b.1 - a.1) - 2) != 0 {
+        if self.throw_ray_distance(hs, (a.1 + 1, b.0 - 1), isize::abs(b.1 - a.1) - 1, true) != 0 {
+            //eprintln!("HRR intersect");
             return false;
         }
 
@@ -281,7 +303,7 @@ impl TileFloor {
 
         // ---
         // iterate through rectangles from largest surface to lowest
-        for r in rectangles.iter() {
+        while let Some(r) = rectangles.pop() {
             // check if rectangle is fully contained
             if self.is_contained(r.ka, r.kb) {
                 return r.surface;
@@ -315,6 +337,12 @@ mod test {
     use utils::asciimap::AsciiMap;
 
     fn ascii_map_to_plan(map: &str) -> String {
+        // asciimap use screen space coordinates but not TileFloor
+        // reversing the lines will transform map will generate correct coordinates
+        let map: Vec<_> = map.trim().split('\n').rev().collect();
+        let map = map.join("\n");
+
+        // create map and search for digits, output their coordinates in order
         let map = AsciiMap::from_multi_lines(map);
         let mut plan = String::new();
         let mut k = 0;
@@ -424,14 +452,44 @@ mod test {
         "
             .trim(),
         );
-        eprintln!("{}", &input);
         let tf = TileFloor::from_input(&input);
         assert_eq!(tf.is_contained(0, 6), true);
         assert_eq!(tf.is_contained(7, 5), true);
         assert_eq!(tf.is_contained(1, 3), true);
         assert_eq!(tf.is_contained(2, 4), true);
         assert_eq!(tf.is_contained(7, 1), false);
+        assert_eq!(tf.is_contained(6, 1), false);
         assert_eq!(tf.is_contained(0, 2), false);
+        assert_eq!(tf.is_contained(5, 2), false);
+    }
+
+    #[test]
+    fn contained3() {
+        let input = ascii_map_to_plan(
+            "
+...................
+...................
+...................
+....7==6...3===2...
+....|..|...|...|...
+....|..|...|...|...
+....|..|...|...|...
+....0==|===|===1...
+.......5===4.......
+...................
+...................
+        "
+            .trim(),
+        );
+        let tf = TileFloor::from_input(&input);
+        assert_eq!(tf.is_contained(0, 6), true);
+        assert_eq!(tf.is_contained(7, 5), false);
+        assert_eq!(tf.is_contained(1, 3), true);
+        assert_eq!(tf.is_contained(2, 4), false);
+        assert_eq!(tf.is_contained(7, 1), false);
+        assert_eq!(tf.is_contained(6, 1), false);
+        assert_eq!(tf.is_contained(0, 2), false);
+        assert_eq!(tf.is_contained(5, 2), false);
     }
 
     #[test]
@@ -485,6 +543,6 @@ mod test {
             .read_to_string(&mut input)
             .unwrap();
         let mut tf = TileFloor::from_input(&input);
-        assert_eq!(tf.largest_rectangle_non_empty(), 0);
+        assert_eq!(tf.largest_rectangle_non_empty(), 1501292304);
     }
 }

@@ -1,3 +1,5 @@
+use std::io::Write;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Rotation {
     R0,
@@ -19,6 +21,15 @@ impl AsciiMap {
             map: vec![],
             width: 0,
             height: 0,
+            rotation: Rotation::R0,
+        }
+    }
+
+    pub fn filled(w: usize, h: usize, c: char) -> Self {
+        Self {
+            map: vec![c; w * h],
+            width: w,
+            height: h,
             rotation: Rotation::R0,
         }
     }
@@ -251,6 +262,32 @@ impl AsciiMap {
             // return a (char, position) tuple
             (c, xy)
         })
+    }
+
+    /// ouput map to ppm using function to convert chars to colors
+    pub fn output_ppm(
+        &self,
+        mut f: impl Write,
+        convert: impl Fn(char) -> (u8, u8, u8),
+    ) -> std::io::Result<()> {
+        // NOTE: quick and dirty PPM implementation
+
+        // PPM pixels in ASCII RGB
+        write!(f, "P3\n")?;
+        // image size
+        write!(f, "{} {}\n", self.width, self.height)?;
+        // 255 maximum value for colors
+        write!(f, "255\n")?;
+
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let &c = self.get(x, y).unwrap();
+                let (r, g, b) = convert(c);
+                write!(f, "{} {} {}\n", r, g, b)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
