@@ -72,6 +72,12 @@ impl CrucibleState {
 }
 
 #[derive(Debug, Copy, Clone)]
+enum CrucibleType {
+    Normal,
+    Ultra,
+}
+
+#[derive(Debug, Copy, Clone)]
 struct Node {
     pub state: CrucibleState,
     pub heat: usize,
@@ -95,10 +101,45 @@ impl Node {
     }
 
     /// return a vec of reachable nodes
-    fn reachable(&self, map: &AsciiMap) -> Vec<Node> {
+    fn reachable(&self, map: &AsciiMap, ctype: CrucibleType) -> Vec<Node> {
+        match ctype {
+            CrucibleType::Normal => self.reachable_normal(map),
+            CrucibleType::Ultra => self.reachable_ultra(map),
+        }
+    }
+
+    fn reachable_normal(&self, map: &AsciiMap) -> Vec<Node> {
         let mut nodes = vec![];
         let mut next_node = self.clone();
         for _ in 0..3 {
+            if let Some(node) = next_node.rotate_advance(-1, &map) {
+                nodes.push(node);
+            }
+            if let Some(node) = next_node.rotate_advance(1, &map) {
+                nodes.push(node);
+            }
+            if let Some(node) = next_node.advance(&map) {
+                next_node = node;
+            } else {
+                break;
+            }
+        }
+
+        nodes
+    }
+
+    fn reachable_ultra(&self, map: &AsciiMap) -> Vec<Node> {
+        let mut nodes = vec![];
+        let mut next_node = self.clone();
+
+        for _ in 0..4 {
+            if let Some(node) = next_node.advance(&map) {
+                next_node = node;
+            } else {
+                return vec![];
+            }
+        }
+        for _ in 3..10 {
             if let Some(node) = next_node.rotate_advance(-1, &map) {
                 nodes.push(node);
             }
@@ -150,7 +191,7 @@ impl LavaMap {
         Self::new(map)
     }
 
-    fn solve(&mut self) -> usize {
+    fn solve(&mut self, ctype: CrucibleType) -> usize {
         let mut visited: HashSet<CrucibleState> = HashSet::new();
 
         // create a priority queue based on heat value
@@ -165,16 +206,18 @@ impl LavaMap {
         // top-left corner facing right
         // or top-left corner facing down
         // NOTE: starting tile heat is not taken into account
-        open.push(Node::new(CrucibleState::new(1, 0, Dir::Right), 0));
-        open.push(Node::new(CrucibleState::new(0, 1, Dir::Down), 0));
+        open.push(Node::new(CrucibleState::new(0, 0, Dir::Right), 0));
+        open.push(Node::new(CrucibleState::new(0, 0, Dir::Down), 0));
+        self.map.print();
 
         // iterate as long there is open nodes to explore
         while !open.is_empty() {
             let node = open.pop().unwrap();
+            eprintln!("{node:?}");
             // check if we reached target
             if node.state.distance(target.0, target.1) == 0 {
                 // return accumulated heat + heat of current state
-                return node.heat + node.state.heat(&self.map).unwrap();
+                return node.heat;
             }
 
             // check if node was already visited
@@ -183,7 +226,7 @@ impl LavaMap {
             }
 
             // iterate through each reachable node
-            for next in node.reachable(&self.map) {
+            for next in node.reachable(&self.map, ctype) {
                 // insert node in open list
                 open.push(next);
             }
@@ -246,7 +289,7 @@ mod test {
         let map = AsciiMap::from_multi_lines(input);
 
         let node = Node::new(CrucibleState::new(1, 1, Dir::Down), 10);
-        let rs = node.reachable(&map);
+        let rs = node.reachable(&map, CrucibleType::Normal);
         assert_eq!(rs[0], Node::new(CrucibleState::new(2, 1, Dir::Right), 11));
         assert_eq!(rs[1], Node::new(CrucibleState::new(0, 1, Dir::Left), 11));
         assert_eq!(rs[2], Node::new(CrucibleState::new(2, 2, Dir::Right), 12));
@@ -269,7 +312,8 @@ mod test {
 
     #[test]
     fn example1() {
-        let input = "2413432311323
+        let input = "
+2413432311323
 3215453535623
 3255245654254
 3446585845452
@@ -282,27 +326,8 @@ mod test {
 1224686865563
 2546548887735
 4322674655533";
-        let loss = LavaMap::from_input(input).solve();
+        let loss = LavaMap::from_input(input.trim()).solve(CrucibleType::Normal);
         assert_eq!(loss, 102);
-    }
-
-    #[test]
-    fn example1_var() {
-        let input = "2413432311323
-3215453535623
-3255245654254
-3446585845452
-4546657867536
-1438598798454
-4457876987766
-3637877979653
-4654967986887
-4564679986453
-1224686865563
-2546548887735
-4322674655535";
-        let loss = LavaMap::from_input(input).solve();
-        assert_eq!(loss, 104);
     }
 
     #[test]
@@ -321,8 +346,40 @@ mod test {
 9999999999919
 9999999999919
 9999999999911";
-        let loss = LavaMap::from_input(input.trim()).solve();
+        let loss = LavaMap::from_input(input.trim()).solve(CrucibleType::Normal);
         assert_eq!(loss, 28);
+    }
+
+    #[test]
+    fn example2() {
+        let input = "
+2413432311323
+3215453535623
+3255245654254
+3446585845452
+4546657867536
+1438598798454
+4457876987766
+3637877979653
+4654967986887
+4564679986453
+1224686865563
+2546548887735
+4322674655533";
+        let loss = LavaMap::from_input(input.trim()).solve(CrucibleType::Ultra);
+        assert_eq!(loss, 94);
+    }
+
+    #[test]
+    fn example2_part2() {
+        let input = "
+111111111111
+999999999991
+999999999991
+999999999991
+999999999991";
+        let loss = LavaMap::from_input(input.trim()).solve(CrucibleType::Ultra);
+        assert_eq!(loss, 71);
     }
 
     #[test]
@@ -332,7 +389,18 @@ mod test {
             .unwrap()
             .read_to_string(&mut input)
             .unwrap();
-        let loss = LavaMap::from_input(&input.trim()).solve();
+        let loss = LavaMap::from_input(&input.trim()).solve(CrucibleType::Normal);
         assert_eq!(loss, 928);
+    }
+
+    #[test]
+    fn good_part2() {
+        let mut input = "".into();
+        std::fs::File::open("input")
+            .unwrap()
+            .read_to_string(&mut input)
+            .unwrap();
+        let loss = LavaMap::from_input(&input.trim()).solve(CrucibleType::Ultra);
+        assert_eq!(loss, 1104);
     }
 }
